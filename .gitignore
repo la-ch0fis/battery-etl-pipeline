@@ -1,7 +1,5 @@
 .aws-sam/
-.claude/
 __pycache__/
 *.pyc
 *.pyo
 .env
-CLAUDE.md
