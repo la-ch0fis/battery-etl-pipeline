@@ -1,0 +1,72 @@
+{
+  "Comment": "Battery ETL Pipeline — ETL transform then Iceberg table creation",
+  "StartAt": "RunETLTransformJob",
+  "States": {
+    "RunETLTransformJob": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "${ETLJobName}",
+        "Arguments": {
+          "--raw_bucket.$": "$.raw_bucket",
+          "--processed_bucket.$": "$.processed_bucket"
+        }
+      },
+      "ResultPath": "$.etl_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Glue.AWSGlueException"],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "PipelineFailed",
+          "ResultPath": "$.error"
+        }
+      ],
+      "Next": "RunIcebergJob"
+    },
+    "RunIcebergJob": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "${IcebergJobName}",
+        "Arguments": {
+          "--processed_bucket.$": "$.processed_bucket",
+          "--iceberg_bucket.$": "$.iceberg_bucket",
+          "--glue_database": "${GlueDatabase}",
+          "--iceberg_table": "${IcebergTable}"
+        }
+      },
+      "ResultPath": "$.iceberg_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Glue.AWSGlueException"],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "PipelineFailed",
+          "ResultPath": "$.error"
+        }
+      ],
+      "Next": "PipelineSucceeded"
+    },
+    "PipelineSucceeded": {
+      "Type": "Succeed"
+    },
+    "PipelineFailed": {
+      "Type": "Fail",
+      "Error": "ETLPipelineError",
+      "Cause": "A Glue job in the pipeline failed. Check CloudWatch Logs for details."
+    }
+  }
+}
